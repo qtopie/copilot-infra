@@ -83,6 +83,7 @@ func (s *Server) HandleSubmitTask(c *gin.Context) {
 
 	taskID := uuid.New().String()
 	logPath := filepath.Join(s.logDir, fmt.Sprintf("%s.log", taskID))
+	absLogPath, _ := filepath.Abs(logPath)
 
 	t := &task.Task{
 		ID:        taskID,
@@ -90,7 +91,7 @@ func (s *Server) HandleSubmitTask(c *gin.Context) {
 		Cmd:       req.Cmd,
 		Vars:      req.Vars,
 		Status:    task.StatusPending,
-		LogPath:   logPath,
+		LogPath:   absLogPath,
 		CreatedAt: time.Now(),
 	}
 

@@ -1,0 +1,25 @@
+version: '3'
+
+tasks:
+  build:
+    desc: Build the copilot-infra binary
+    cmds:
+      - go build -o bin/copilot-infra cmd/copilot-infra/main.go
+
+  test:
+    desc: Run tests
+    cmds:
+      - go test ./...
+
+  run:
+    desc: Run the application
+    cmds:
+      - go run cmd/copilot-infra/main.go
+
+  # Sample task to be executed by copilot-infra
+  sample:
+    desc: A sample task for testing
+    cmds:
+      - echo "Starting sample task..."
+      - sleep 5
+      - echo "Sample task completed."

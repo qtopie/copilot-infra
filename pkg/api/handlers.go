@@ -31,7 +31,18 @@ func NewServer(store *state.Store, worker *worker.Worker, logDir string) *Server
 func (s *Server) RegisterRoutes(r *gin.Engine) {
 	r.POST("/tasks", s.HandleSubmitTask)
 	r.GET("/tasks/:id", s.HandleGetTask)
+	r.DELETE("/tasks/:id", s.HandleCancelTask)
 	r.GET("/tasks/:id/logs", s.HandleGetLogs)
+}
+
+func (s *Server) HandleCancelTask(c *gin.Context) {
+	id := c.Param("id")
+	if ok := s.worker.Cancel(id); ok {
+		c.JSON(http.StatusOK, gin.H{"message": "task cancellation signaled"})
+		return
+	}
+
+	c.JSON(http.StatusNotFound, gin.H{"error": "task not found or not running"})
 }
 
 func (s *Server) HandleSubmitTask(c *gin.Context) {

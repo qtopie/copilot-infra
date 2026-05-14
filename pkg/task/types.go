@@ -11,6 +11,7 @@ const (
 	StatusRunning   Status = "running"
 	StatusSucceeded Status = "succeeded"
 	StatusFailed    Status = "failed"
+	StatusCancelled Status = "cancelled"
 )
 
 type Task struct {

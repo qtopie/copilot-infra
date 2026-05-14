@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -18,26 +20,28 @@ import (
 )
 
 func main() {
+	apiPort := flag.Int("port", 18080, "API server port")
+	daprHTTPPort := flag.Int("dapr-http-port", 3580, "Embedded Dapr HTTP port")
+	daprGRPCPort := flag.Int("dapr-grpc-port", 50080, "Embedded Dapr gRPC port")
+	daprAppID := flag.String("app-id", "copilot-infra", "Dapr app ID")
+	logDir := flag.String("log-dir", ".logs", "Directory for task logs")
+	flag.Parse()
+
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	logDir := ".logs"
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(*logDir, 0755); err != nil {
 		log.Fatalf("failed to create log directory: %v", err)
 	}
 
 	// 1. Initialize Task Executor
-	executor, err := task.NewExecutor(logDir)
+	executor, err := task.NewExecutor(*logDir)
 	if err != nil {
 		log.Fatalf("failed to create executor: %v", err)
 	}
 
 	// 2. Initialize Embedded Dapr Runtime
-	daprHTTPPort := 3500
-	daprGRPCPort := 50001
-	daprAppID := "copilot-infra"
-
-	rt, err := runtime.NewEmbeddedRuntime(daprAppID, daprHTTPPort, daprGRPCPort)
+	rt, err := runtime.NewEmbeddedRuntime(*daprAppID, *daprHTTPPort, *daprGRPCPort)
 	if err != nil {
 		log.Fatalf("failed to create embedded dapr runtime: %v", err)
 	}
@@ -47,7 +51,7 @@ func main() {
 	defer rt.Stop()
 
 	// 3. Initialize Dapr Client
-	daprClient, err := client.NewClientWithPort(strconv.Itoa(daprGRPCPort))
+	daprClient, err := client.NewClientWithPort(strconv.Itoa(*daprGRPCPort))
 	if err != nil {
 		log.Fatalf("failed to connect to dapr runtime: %v", err)
 	}
@@ -61,18 +65,21 @@ func main() {
 	go w.Start(ctx)
 
 	// 5. Initialize API Server
-	server := api.NewServer(store, w, logDir)
+	server := api.NewServer(store, w, *logDir)
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	server.RegisterRoutes(r)
 
 	// 6. Start Server
+	addr := fmt.Sprintf(":%d", *apiPort)
 	go func() {
-		if err := r.Run(":8080"); err != nil {
+		if err := r.Run(addr); err != nil {
 			log.Fatalf("failed to start server: %v", err)
 		}
 	}()
 
-	log.Println("Copilot-Infra is running on :8080")
+	log.Printf("Copilot-Infra is running on %s", addr)
 	<-ctx.Done()
 	log.Println("Shutting down...")
 }
+

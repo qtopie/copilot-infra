@@ -33,6 +33,8 @@ func NewServer(store *state.Store, worker *worker.Worker, logDir, componentsDir 
 type RegisterConnectionRequest struct {
 	Name string `json:"name" binding:"required"`
 	URL  string `json:"url" binding:"required"`
+	NS   string `json:"ns"` // SurrealDB Namespace
+	DB   string `json:"db"` // SurrealDB Database
 }
 
 func (s *Server) RegisterRoutes(r *gin.Engine) {
@@ -52,6 +54,16 @@ func (s *Server) HandleRegisterConnection(c *gin.Context) {
 		return
 	}
 
+	metadata := fmt.Sprintf(`  - name: url
+    value: "%s"`, req.URL)
+
+	if req.NS != "" {
+		metadata += fmt.Sprintf("\n  - name: \"header.NS\"\n    value: \"%s\"", req.NS)
+	}
+	if req.DB != "" {
+		metadata += fmt.Sprintf("\n  - name: \"header.DB\"\n    value: \"%s\"", req.DB)
+	}
+
 	content := fmt.Sprintf(`apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:
@@ -60,9 +72,8 @@ spec:
   type: bindings.http
   version: v1
   metadata:
-  - name: url
-    value: "%s"
-`, req.Name, req.URL)
+%s
+`, req.Name, metadata)
 
 	filePath := filepath.Join(s.componentsDir, fmt.Sprintf("%s.yaml", req.Name))
 	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
@@ -73,6 +84,8 @@ spec:
 	c.JSON(http.StatusOK, gin.H{
 		"message":   "connection registered",
 		"name":      req.Name,
+		"ns":        req.NS,
+		"db":        req.DB,
 		"dapr_path": fmt.Sprintf("/v1.0/bindings/%s", req.Name),
 	})
 }

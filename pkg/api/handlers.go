@@ -32,7 +32,36 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 	r.POST("/tasks", s.HandleSubmitTask)
 	r.GET("/tasks/:id", s.HandleGetTask)
 	r.DELETE("/tasks/:id", s.HandleCancelTask)
+	r.POST("/tasks/:id/restart", s.HandleRestartTask)
 	r.GET("/tasks/:id/logs", s.HandleGetLogs)
+}
+
+func (s *Server) HandleRestartTask(c *gin.Context) {
+	id := c.Param("id")
+	t, err := s.store.GetTask(c.Request.Context(), id)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "task not found"})
+		return
+	}
+
+	// 1. Cancel if running
+	s.worker.Cancel(id)
+
+	// 2. Reset task state
+	t.Status = task.StatusPending
+	t.Error = ""
+	t.StartedAt = nil
+	t.EndedAt = nil
+
+	if err := s.store.SaveTask(c.Request.Context(), t); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update task"})
+		return
+	}
+
+	// 3. Re-submit
+	s.worker.Submit(t)
+
+	c.JSON(http.StatusOK, gin.H{"message": "task restarted", "id": t.ID})
 }
 
 func (s *Server) HandleCancelTask(c *gin.Context) {

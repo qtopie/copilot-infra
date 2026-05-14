@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	httpBinding "github.com/dapr/components-contrib/bindings/http"
 	mdnsnr "github.com/dapr/components-contrib/nameresolution/mdns"
 	sqlitestate "github.com/dapr/components-contrib/state/sqlite"
 	bindingLoader "github.com/dapr/dapr/pkg/components/bindings"
@@ -43,12 +44,16 @@ func NewEmbeddedRuntime(appID string, httpPort, grpcPort int) (*EmbeddedRuntime,
 	stateReg.Logger = logger.NewLogger("dapr.statestore")
 	stateReg.RegisterComponent(sqlitestate.NewSQLiteStateStore, "sqlite")
 
+	// Bindings
+	bindingReg := bindingLoader.NewRegistry()
+	bindingReg.RegisterOutputBinding(httpBinding.NewHTTP, "http")
+
 	registryOptions := registry.NewOptions().
 		WithNameResolutions(nrReg).
 		WithSecretStores(secretLoader.NewRegistry()).
 		WithPubSubs(pubsubLoader.NewRegistry()).
 		WithStateStores(stateReg).
-		WithBindings(bindingLoader.NewRegistry()).
+		WithBindings(bindingReg).
 		WithHTTPMiddlewares(middlewareLoader.NewRegistry()).
 		WithConfigurations(configurationLoader.NewRegistry()).
 		WithLocks(lockLoader.NewRegistry())
@@ -59,10 +64,10 @@ func NewEmbeddedRuntime(appID string, httpPort, grpcPort int) (*EmbeddedRuntime,
 		return nil, fmt.Errorf("failed to create components directory: %w", err)
 	}
 
-	// Create a default state store if not exists
+	// 1. Create a default state store if not exists
 	stateStorePath := componentsDir + "/statestore.yaml"
 	if _, err := os.Stat(stateStorePath); os.IsNotExist(err) {
-		err = os.WriteFile(stateStorePath, []byte(`apiVersion: dapr.io/v1alpha1
+		os.WriteFile(stateStorePath, []byte(`apiVersion: dapr.io/v1alpha1
 kind: Component
 metadata:
   name: statestore
@@ -73,9 +78,22 @@ spec:
   - name: connectionString
     value: "data.db"
 `), 0644)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create default state store: %w", err)
-		}
+	}
+
+	// 2. Create SurrealDB HTTP Binding if not exists
+	surrealPath := componentsDir + "/surrealdb.yaml"
+	if _, err := os.Stat(surrealPath); os.IsNotExist(err) {
+		os.WriteFile(surrealPath, []byte(`apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: surrealdb
+spec:
+  type: bindings.http
+  version: v1
+  metadata:
+  - name: url
+    value: "http://localhost:8000/sql"
+`), 0644)
 	}
 
 	cfg := &runtime.Config{

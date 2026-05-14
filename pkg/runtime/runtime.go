@@ -8,11 +8,20 @@ import (
 	"time"
 
 	mdnsnr "github.com/dapr/components-contrib/nameresolution/mdns"
+	sqlitestate "github.com/dapr/components-contrib/state/sqlite"
+	bindingLoader "github.com/dapr/dapr/pkg/components/bindings"
+	configurationLoader "github.com/dapr/dapr/pkg/components/configuration"
+	lockLoader "github.com/dapr/dapr/pkg/components/lock"
+	middlewareLoader "github.com/dapr/dapr/pkg/components/middleware/http"
 	nrLoader "github.com/dapr/dapr/pkg/components/nameresolution"
+	pubsubLoader "github.com/dapr/dapr/pkg/components/pubsub"
+	secretLoader "github.com/dapr/dapr/pkg/components/secretstores"
+	stateLoader "github.com/dapr/dapr/pkg/components/state"
 	"github.com/dapr/dapr/pkg/healthz"
 	"github.com/dapr/dapr/pkg/metrics"
 	"github.com/dapr/dapr/pkg/runtime"
 	"github.com/dapr/dapr/pkg/runtime/registry"
+	"github.com/dapr/dapr/pkg/security/fake"
 	"github.com/dapr/kit/logger"
 )
 
@@ -23,10 +32,26 @@ type EmbeddedRuntime struct {
 
 func NewEmbeddedRuntime(appID string, httpPort, grpcPort int) (*EmbeddedRuntime, error) {
 	hz := healthz.New()
-	nrRegistry := nrLoader.NewRegistry()
-	nrRegistry.Logger = logger.NewLogger("dapr.nameresolution")
-	nrRegistry.RegisterComponent(mdnsnr.NewResolver, "mdns")
-	registryOptions := registry.NewOptions().WithNameResolutions(nrRegistry)
+
+	// Name Resolution
+	nrReg := nrLoader.NewRegistry()
+	nrReg.Logger = logger.NewLogger("dapr.nameresolution")
+	nrReg.RegisterComponent(mdnsnr.NewResolver, "mdns")
+
+	// State Store
+	stateReg := stateLoader.NewRegistry()
+	stateReg.Logger = logger.NewLogger("dapr.statestore")
+	stateReg.RegisterComponent(sqlitestate.NewSQLiteStateStore, "sqlite")
+
+	registryOptions := registry.NewOptions().
+		WithNameResolutions(nrReg).
+		WithSecretStores(secretLoader.NewRegistry()).
+		WithPubSubs(pubsubLoader.NewRegistry()).
+		WithStateStores(stateReg).
+		WithBindings(bindingLoader.NewRegistry()).
+		WithHTTPMiddlewares(middlewareLoader.NewRegistry()).
+		WithConfigurations(configurationLoader.NewRegistry()).
+		WithLocks(lockLoader.NewRegistry())
 
 	// Ensure components directory exists
 	componentsDir := "./components"
@@ -60,7 +85,7 @@ spec:
 		DaprInternalGRPCPort:          "0",
 		DaprInternalGRPCListenAddress: "127.0.0.1",
 		ProfilePort:                   "0",
-		ApplicationPort:               "0", // No app callback needed for now
+		ApplicationPort:               "0",
 		AppProtocol:                   "http",
 		AppMaxConcurrency:             -1,
 		MaxRequestSize:                -1,
@@ -75,6 +100,7 @@ spec:
 		Registry:      registryOptions,
 		Healthz:       hz,
 		ResourcesPath: []string{componentsDir},
+		Security:      fake.New(), // Use fake security handler to avoid nil panic
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -93,6 +119,7 @@ spec:
 
 func (r *EmbeddedRuntime) Start(ctx context.Context) error {
 	go func() {
+		fmt.Printf("[Dapr] Starting embedded runtime...\n")
 		if err := r.rt.Run(ctx); err != nil {
 			fmt.Printf("[Dapr] Runtime error: %v\n", err)
 		}

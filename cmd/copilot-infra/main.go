@@ -65,7 +65,8 @@ func main() {
 	go w.Start(ctx)
 
 	// 5. Initialize API Server
-	server := api.NewServer(store, w, *logDir)
+	componentsDir := "./components"
+	server := api.NewServer(store, w, *logDir, componentsDir)
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 	server.RegisterRoutes(r)

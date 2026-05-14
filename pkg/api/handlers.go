@@ -15,17 +15,24 @@ import (
 )
 
 type Server struct {
-	store  *state.Store
-	worker *worker.Worker
-	logDir string
+	store         *state.Store
+	worker        *worker.Worker
+	logDir        string
+	componentsDir string
 }
 
-func NewServer(store *state.Store, worker *worker.Worker, logDir string) *Server {
+func NewServer(store *state.Store, worker *worker.Worker, logDir, componentsDir string) *Server {
 	return &Server{
-		store:  store,
-		worker: worker,
-		logDir: logDir,
+		store:         store,
+		worker:        worker,
+		logDir:        logDir,
+		componentsDir: componentsDir,
 	}
+}
+
+type RegisterConnectionRequest struct {
+	Name string `json:"name" binding:"required"`
+	URL  string `json:"url" binding:"required"`
 }
 
 func (s *Server) RegisterRoutes(r *gin.Engine) {
@@ -34,6 +41,40 @@ func (s *Server) RegisterRoutes(r *gin.Engine) {
 	r.DELETE("/tasks/:id", s.HandleCancelTask)
 	r.POST("/tasks/:id/restart", s.HandleRestartTask)
 	r.GET("/tasks/:id/logs", s.HandleGetLogs)
+
+	r.POST("/connections", s.HandleRegisterConnection)
+}
+
+func (s *Server) HandleRegisterConnection(c *gin.Context) {
+	var req RegisterConnectionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	content := fmt.Sprintf(`apiVersion: dapr.io/v1alpha1
+kind: Component
+metadata:
+  name: %s
+spec:
+  type: bindings.http
+  version: v1
+  metadata:
+  - name: url
+    value: "%s"
+`, req.Name, req.URL)
+
+	filePath := filepath.Join(s.componentsDir, fmt.Sprintf("%s.yaml", req.Name))
+	if err := os.WriteFile(filePath, []byte(content), 0644); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save connection component"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message":   "connection registered",
+		"name":      req.Name,
+		"dapr_path": fmt.Sprintf("/v1.0/bindings/%s", req.Name),
+	})
 }
 
 func (s *Server) HandleRestartTask(c *gin.Context) {

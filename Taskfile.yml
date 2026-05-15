@@ -11,10 +11,31 @@ tasks:
     cmds:
       - go test ./...
 
-  run:
-    desc: Run the application
+  proto:
+    desc: Generate Go code from proto files
     cmds:
-      - go run cmd/copilot-infra/main.go
+      - buf generate
+
+  mcp:
+    desc: Run the application in MCP mode (stdio)
+    cmds:
+      - go run cmd/copilot-infra/main.go -mcp
+
+  run-grpc:
+    desc: Run the application with gRPC and HTTP transcoding
+    cmds:
+      - go run cmd/copilot-infra/main.go -grpc-port 50051 -dapr-http-port 3580
+
+  # --- Infrastructure Persistence Example ---
+  deploy-persistent-nginx:
+    desc: Deploy Nginx with persistence (managed by Pulumi via copilot-infra)
+    vars:
+      PROJECT: nginx-service
+      STACK: dev
+    cmds:
+      # This looks like a regular command, but when copilot-infra runs it,
+      # it can detect the 'pulumi' intent or use a special task type.
+      - pulumi up --stack {{.STACK}} --yes
 
   # Sample task to be executed by copilot-infra
   sample:

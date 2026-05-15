@@ -14,12 +14,21 @@ const (
 	StatusCancelled Status = "cancelled"
 )
 
+type Type string
+
+const (
+	TypeTaskfile Type = "taskfile"
+	TypeInfra    Type = "infra"
+)
+
 type Task struct {
 	ID        string            `json:"id"`
-	Name      string            `json:"name,omitempty"`      // Task name in Taskfile
+	Type      Type              `json:"type"`                // taskfile or infra
+	Name      string            `json:"name,omitempty"`      // Task name in Taskfile or Stack name in Pulumi
+	Project   string            `json:"project,omitempty"`   // Pulumi project name
 	Cmd       string            `json:"cmd,omitempty"`       // Arbitrary command
 	Args      []string          `json:"args,omitempty"`      // Arguments for the command
-	Vars      map[string]string `json:"vars,omitempty"`      // Variables for Taskfile
+	Vars      map[string]string `json:"vars,omitempty"`      // Variables for Taskfile or Pulumi Config
 	Status    Status            `json:"status"`
 	LogPath   string            `json:"log_path"`
 	Error     string            `json:"error,omitempty"`

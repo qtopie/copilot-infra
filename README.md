@@ -23,11 +23,17 @@ go build -o bin/copilot-infra ./cmd/copilot-infra
 ./bin/copilot-infra
 ```
 
+Default Ports:
+- **gRPC API**: `31415`
+- **Dapr HTTP Proxy**: `1415`
+- **Dapr gRPC Proxy**: `51415`
+
 ## Project structure
 
-- `cmd/copilot-infra/` - application entrypoint
-- `pkg/api/` - HTTP/API handlers
-- `pkg/runtime/` - runtime orchestration logic
+- `api/proto/v1/` - Protobuf definitions
+- `cmd/copilot-infra/` - Application entrypoint
+- `pkg/api/` - gRPC and MCP handlers
+- `pkg/runtime/` - Runtime orchestration logic (Dapr)
 - `pkg/state/` - state storage abstractions
 - `pkg/task/` - task execution engine and types
 - `pkg/worker/` - background worker implementation

@@ -31,7 +31,7 @@ type EmbeddedRuntime struct {
 	cancel context.CancelFunc
 }
 
-func NewEmbeddedRuntime(appID string, httpPort, grpcPort int) (*EmbeddedRuntime, error) {
+func NewEmbeddedRuntime(appID string, httpPort, grpcPort, appPort int, appProtocol string) (*EmbeddedRuntime, error) {
 	hz := healthz.New()
 
 	// Name Resolution
@@ -103,8 +103,8 @@ spec:
 		DaprInternalGRPCPort:          "0",
 		DaprInternalGRPCListenAddress: "127.0.0.1",
 		ProfilePort:                   "0",
-		ApplicationPort:               "0",
-		AppProtocol:                   "http",
+		ApplicationPort:               strconv.Itoa(appPort),
+		AppProtocol:                   appProtocol,
 		AppMaxConcurrency:             -1,
 		MaxRequestSize:                -1,
 		ReadBufferSize:                -1,

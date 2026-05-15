@@ -1,0 +1,131 @@
+syntax = "proto3";
+
+package task.v1;
+
+option go_package = "github.com/qtopie/copilot-infra/pkg/api/proto/v1;taskv1";
+
+service TaskService {
+  // Submit a new task for execution
+  rpc SubmitTask(SubmitTaskRequest) returns (SubmitTaskResponse);
+  
+  // Get the current status of a task
+  rpc GetTask(GetTaskRequest) returns (GetTaskResponse);
+  
+  // Get logs for a specific task
+  rpc GetTaskLogs(GetTaskLogsRequest) returns (GetTaskLogsResponse);
+  
+  // Search logs for a specific task
+  rpc SearchLogs(SearchLogsRequest) returns (SearchResponse);
+
+  // Search any file or directory
+  rpc GlobalSearch(GlobalSearchRequest) returns (SearchResponse);
+
+  // List tasks
+  rpc ListTasks(ListTasksRequest) returns (ListTasksResponse);
+
+  // Restart a task
+  rpc RestartTask(RestartTaskRequest) returns (RestartTaskResponse);
+
+  // Cancel a task
+  rpc CancelTask(CancelTaskRequest) returns (CancelTaskResponse);
+
+  // Register a connection (Dapr component)
+  rpc RegisterConnection(RegisterConnectionRequest) returns (RegisterConnectionResponse);
+}
+
+message RestartTaskRequest {
+  string task_id = 1;
+}
+
+message RestartTaskResponse {
+  string task_id = 1;
+}
+
+message CancelTaskRequest {
+  string task_id = 1;
+}
+
+message CancelTaskResponse {
+  string message = 1;
+}
+
+message RegisterConnectionRequest {
+  string name = 1;
+  string url = 2;
+  string ns = 3;
+  string db = 4;
+  string auth = 5;
+}
+
+message RegisterConnectionResponse {
+  string message = 1;
+  string name = 2;
+  string dapr_path = 3;
+}
+
+message SearchLogsRequest {
+  string task_id = 1;
+  string pattern = 2;
+  int32 before = 3;
+  int32 after = 4;
+}
+
+message GlobalSearchRequest {
+  string path = 1;
+  string pattern = 2;
+  string ext = 3;
+  int32 before = 4;
+  int32 after = 5;
+}
+
+message SearchMatch {
+  string path = 1;
+  int32 line_num = 2;
+  string text = 3;
+  repeated string context_before = 4;
+  repeated string context_after = 5;
+}
+
+message SearchResponse {
+  repeated SearchMatch matches = 1;
+}
+
+message SubmitTaskRequest {
+  string command = 1;
+  map<string, string> env = 2;
+  string work_dir = 3;
+  string type = 4;    // taskfile or infra
+  string project = 5; // pulumi project name
+  string name = 6;    // task name or stack name
+}
+
+message SubmitTaskResponse {
+  string task_id = 1;
+}
+
+message GetTaskRequest {
+  string task_id = 1;
+}
+
+message GetTaskResponse {
+  string task_id = 1;
+  string status = 2;
+  string created_at = 3;
+  string updated_at = 4;
+  string error = 5;
+}
+
+message GetTaskLogsRequest {
+  string task_id = 1;
+  int64 tail_lines = 2;
+}
+
+message GetTaskLogsResponse {
+  string content = 1;
+}
+
+message ListTasksRequest {}
+
+message ListTasksResponse {
+  repeated GetTaskResponse tasks = 1;
+}

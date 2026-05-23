@@ -602,9 +602,10 @@ type SubmitTaskRequest struct {
 	Command       string                 `protobuf:"bytes,1,opt,name=command,proto3" json:"command,omitempty"`
 	Env           map[string]string      `protobuf:"bytes,2,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	WorkDir       string                 `protobuf:"bytes,3,opt,name=work_dir,json=workDir,proto3" json:"work_dir,omitempty"`
-	Type          string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`       // taskfile or infra
-	Project       string                 `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"` // pulumi project name
-	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`       // task name or stack name
+	Type          string                 `protobuf:"bytes,4,opt,name=type,proto3" json:"type,omitempty"`                                           // taskfile or infra
+	Project       string                 `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"`                                     // pulumi project name
+	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`                                           // task name or stack name
+	IsLongRunning bool                   `protobuf:"varint,7,opt,name=is_long_running,json=isLongRunning,proto3" json:"is_long_running,omitempty"` // true for persistent daemon tasks
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -681,9 +682,17 @@ func (x *SubmitTaskRequest) GetName() string {
 	return ""
 }
 
+func (x *SubmitTaskRequest) GetIsLongRunning() bool {
+	if x != nil {
+		return x.IsLongRunning
+	}
+	return false
+}
+
 type SubmitTaskResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	AccessUrl     string                 `protobuf:"bytes,2,opt,name=access_url,json=accessUrl,proto3" json:"access_url,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -721,6 +730,13 @@ func (*SubmitTaskResponse) Descriptor() ([]byte, []int) {
 func (x *SubmitTaskResponse) GetTaskId() string {
 	if x != nil {
 		return x.TaskId
+	}
+	return ""
+}
+
+func (x *SubmitTaskResponse) GetAccessUrl() string {
+	if x != nil {
+		return x.AccessUrl
 	}
 	return ""
 }
@@ -776,6 +792,8 @@ type GetTaskResponse struct {
 	CreatedAt     string                 `protobuf:"bytes,3,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     string                 `protobuf:"bytes,4,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
+	AccessUrl     string                 `protobuf:"bytes,6,opt,name=access_url,json=accessUrl,proto3" json:"access_url,omitempty"`
+	Name          string                 `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -841,6 +859,20 @@ func (x *GetTaskResponse) GetUpdatedAt() string {
 func (x *GetTaskResponse) GetError() string {
 	if x != nil {
 		return x.Error
+	}
+	return ""
+}
+
+func (x *GetTaskResponse) GetAccessUrl() string {
+	if x != nil {
+		return x.AccessUrl
+	}
+	return ""
+}
+
+func (x *GetTaskResponse) GetName() string {
+	if x != nil {
+		return x.Name
 	}
 	return ""
 }
@@ -1062,21 +1094,24 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\x0econtext_before\x18\x04 \x03(\tR\rcontextBefore\x12#\n" +
 	"\rcontext_after\x18\x05 \x03(\tR\fcontextAfter\"@\n" +
 	"\x0eSearchResponse\x12.\n" +
-	"\amatches\x18\x01 \x03(\v2\x14.task.v1.SearchMatchR\amatches\"\xf9\x01\n" +
+	"\amatches\x18\x01 \x03(\v2\x14.task.v1.SearchMatchR\amatches\"\xa1\x02\n" +
 	"\x11SubmitTaskRequest\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x125\n" +
 	"\x03env\x18\x02 \x03(\v2#.task.v1.SubmitTaskRequest.EnvEntryR\x03env\x12\x19\n" +
 	"\bwork_dir\x18\x03 \x01(\tR\aworkDir\x12\x12\n" +
 	"\x04type\x18\x04 \x01(\tR\x04type\x12\x18\n" +
 	"\aproject\x18\x05 \x01(\tR\aproject\x12\x12\n" +
-	"\x04name\x18\x06 \x01(\tR\x04name\x1a6\n" +
+	"\x04name\x18\x06 \x01(\tR\x04name\x12&\n" +
+	"\x0fis_long_running\x18\a \x01(\bR\risLongRunning\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"-\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"L\n" +
 	"\x12SubmitTaskResponse\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\")\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
+	"\n" +
+	"access_url\x18\x02 \x01(\tR\taccessUrl\")\n" +
 	"\x0eGetTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\x96\x01\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\xc9\x01\n" +
 	"\x0fGetTaskResponse\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
@@ -1084,7 +1119,10 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"created_at\x18\x03 \x01(\tR\tcreatedAt\x12\x1d\n" +
 	"\n" +
 	"updated_at\x18\x04 \x01(\tR\tupdatedAt\x12\x14\n" +
-	"\x05error\x18\x05 \x01(\tR\x05error\"L\n" +
+	"\x05error\x18\x05 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"access_url\x18\x06 \x01(\tR\taccessUrl\x12\x12\n" +
+	"\x04name\x18\a \x01(\tR\x04name\"L\n" +
 	"\x12GetTaskLogsRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +

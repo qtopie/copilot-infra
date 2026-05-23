@@ -11,3 +11,6 @@ plugins:
   - remote: buf.build/grpc/go
     out: pkg
     opt: paths=source_relative
+  - remote: buf.build/grpc-ecosystem/gateway
+    out: pkg
+    opt: paths=source_relative,generate_unbound_methods=true

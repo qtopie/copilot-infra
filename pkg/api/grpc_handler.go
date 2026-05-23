@@ -34,11 +34,55 @@ func NewGRPCHandler(worker *worker.Worker, store *state.Store, logDir, component
 }
 
 func (h *GRPCHandler) SubmitTask(ctx context.Context, req *taskv1.SubmitTaskRequest) (*taskv1.SubmitTaskResponse, error) {
-	id := uuid.New().String()
-	
+	var id string
+	var existing *task.Task
+
+	// 1. Determine ID: Use deterministic UUID if name is provided, else random
+	if req.Name != "" {
+		id = uuid.NewMD5(uuid.NameSpaceDNS, []byte(req.Name)).String()
+		fmt.Printf("[GRPCHandler] Using deterministic ID %s for task name: %s\n", id, req.Name)
+		
+		// Check if it already exists
+		existing, _ = h.store.GetTask(ctx, id)
+	} else {
+		id = uuid.New().String()
+	}
+
+	// 2. If exists, cancel and prepare for restart
+	if existing != nil {
+		fmt.Printf("[GRPCHandler] Task %s already exists, restarting...\n", req.Name)
+		h.worker.Cancel(id)
+		
+		// Update dynamic fields
+		if req.Command != "" {
+			existing.Cmd = req.Command
+		}
+		if req.Env != nil {
+			existing.Vars = req.Env
+		}
+		if req.WorkDir != "" {
+			existing.WorkDir = req.WorkDir
+		}
+		existing.Status = task.StatusPending
+		existing.Error = ""
+		existing.StartedAt = nil
+		existing.EndedAt = nil
+		
+		if err := h.store.SaveTask(ctx, existing); err != nil {
+			return nil, fmt.Errorf("failed to update task: %w", err)
+		}
+		
+		h.worker.Submit(existing)
+		return &taskv1.SubmitTaskResponse{TaskId: id}, nil
+	}
+
+	// 3. Create new task
 	taskType := task.TypeTaskfile
-	if req.Type == "infra" {
+	switch req.Type {
+	case "infra":
 		taskType = task.TypeInfra
+	case "browser":
+		taskType = task.TypeBrowser
 	}
 
 	t := &task.Task{
@@ -46,6 +90,7 @@ func (h *GRPCHandler) SubmitTask(ctx context.Context, req *taskv1.SubmitTaskRequ
 		Type:      taskType,
 		Name:      req.Name,
 		Project:   req.Project,
+		WorkDir:   req.WorkDir,
 		Cmd:       req.Command,
 		Vars:      req.Env,
 		Status:    task.StatusPending,
@@ -76,6 +121,8 @@ func (h *GRPCHandler) GetTask(ctx context.Context, req *taskv1.GetTaskRequest) (
 		CreatedAt: t.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: t.CreatedAt.Format(time.RFC3339), // Simplified
 		Error:     t.Error,
+		AccessUrl: t.AccessURL,
+		Name:      t.Name,
 	}, nil
 }
 
@@ -96,7 +143,25 @@ func (h *GRPCHandler) GetTaskLogs(ctx context.Context, req *taskv1.GetTaskLogsRe
 }
 
 func (h *GRPCHandler) ListTasks(ctx context.Context, req *taskv1.ListTasksRequest) (*taskv1.ListTasksResponse, error) {
-	return &taskv1.ListTasksResponse{}, nil
+	tasks, err := h.store.ListTasks(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tasks: %w", err)
+	}
+
+	var respTasks []*taskv1.GetTaskResponse
+	for _, t := range tasks {
+		respTasks = append(respTasks, &taskv1.GetTaskResponse{
+			TaskId:    t.ID,
+			Status:    string(t.Status),
+			CreatedAt: t.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: t.CreatedAt.Format(time.RFC3339),
+			Error:     t.Error,
+			AccessUrl: t.AccessURL,
+			Name:      t.Name,
+		})
+	}
+
+	return &taskv1.ListTasksResponse{Tasks: respTasks}, nil
 }
 
 func (h *GRPCHandler) RestartTask(ctx context.Context, req *taskv1.RestartTaskRequest) (*taskv1.RestartTaskResponse, error) {
@@ -121,6 +186,24 @@ func (h *GRPCHandler) RestartTask(ctx context.Context, req *taskv1.RestartTaskRe
 }
 
 func (h *GRPCHandler) CancelTask(ctx context.Context, req *taskv1.CancelTaskRequest) (*taskv1.CancelTaskResponse, error) {
+	t, err := h.store.GetTask(ctx, req.TaskId)
+	if err == nil && t.IsLongRunning {
+		// Destroy the background task via Pulumi
+		proj := t.Project
+		if proj == "" {
+			proj = "copilot-infra-daemons"
+		}
+		if h.worker.Executor().InfraManager != nil {
+			err = h.worker.Executor().InfraManager.Destroy(ctx, proj, t.ID, os.Stdout)
+			if err != nil {
+				return nil, fmt.Errorf("failed to destroy long-running task: %w", err)
+			}
+			t.Status = task.StatusCancelled
+			h.store.SaveTask(ctx, t)
+			return &taskv1.CancelTaskResponse{Message: "long-running task destroyed"}, nil
+		}
+	}
+
 	if ok := h.worker.Cancel(req.TaskId); ok {
 		return &taskv1.CancelTaskResponse{Message: "task cancellation signaled"}, nil
 	}

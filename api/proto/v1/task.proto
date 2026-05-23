@@ -97,10 +97,12 @@ message SubmitTaskRequest {
   string type = 4;    // taskfile or infra
   string project = 5; // pulumi project name
   string name = 6;    // task name or stack name
+  bool is_long_running = 7; // true for persistent daemon tasks
 }
 
 message SubmitTaskResponse {
   string task_id = 1;
+  string access_url = 2;
 }
 
 message GetTaskRequest {
@@ -113,6 +115,8 @@ message GetTaskResponse {
   string created_at = 3;
   string updated_at = 4;
   string error = 5;
+  string access_url = 6;
+  string name = 7;
 }
 
 message GetTaskLogsRequest {

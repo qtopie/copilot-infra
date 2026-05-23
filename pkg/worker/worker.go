@@ -27,6 +27,10 @@ func NewWorker(executor *task.Executor, store *state.Store) *Worker {
 	}
 }
 
+func (w *Worker) Executor() *task.Executor {
+	return w.executor
+}
+
 func (w *Worker) Submit(t *task.Task) {
 	w.queue <- t
 }
@@ -50,7 +54,7 @@ func (w *Worker) Start(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case t := <-w.queue:
-			w.processTask(ctx, t)
+			go w.processTask(ctx, t)
 		}
 	}
 }
@@ -90,8 +94,13 @@ func (w *Worker) processTask(ctx context.Context, t *task.Task) {
 			t.Error = err.Error()
 		}
 	} else {
-		log.Printf("Task %s succeeded", t.ID)
-		t.Status = task.StatusSucceeded
+		if t.IsLongRunning {
+			log.Printf("Long-running Task %s deployed successfully", t.ID)
+			// Do not change status; it remains Running
+		} else {
+			log.Printf("Task %s succeeded", t.ID)
+			t.Status = task.StatusSucceeded
+		}
 	}
 
 	w.store.SaveTask(ctx, t)

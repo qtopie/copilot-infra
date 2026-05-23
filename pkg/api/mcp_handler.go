@@ -158,6 +158,16 @@ func (h *MCPHandler) handleRequest(req JSONRPCRequest) JSONRPCResponse {
 					},
 				},
 				{
+					"name":        "start_browser",
+					"description": "Start a browser for AI agent (via Pulumi)",
+					"inputSchema": map[string]interface{}{
+						"type": "object",
+						"properties": map[string]interface{}{
+							"port": map[string]interface{}{"type": "integer", "description": "Remote debugging port (default 9222)"},
+						},
+					},
+				},
+				{
 					"name":        "register_connection",
 					"description": "Register a new Dapr connection component (e.g. SurrealDB)",
 					"inputSchema": map[string]interface{}{
@@ -259,6 +269,21 @@ func (h *MCPHandler) handleRequest(req JSONRPCRequest) JSONRPCResponse {
 			}
 			json.Unmarshal(params.Arguments, &args)
 			res, e := h.grpcHandler.CancelTask(ctx, &taskv1.CancelTaskRequest{TaskId: args.TaskID})
+			result = res
+			err = e
+		case "start_browser":
+			var args struct {
+				Port int `json:"port"`
+			}
+			json.Unmarshal(params.Arguments, &args)
+			port := args.Port
+			if port == 0 {
+				port = 9222
+			}
+			res, e := h.grpcHandler.SubmitTask(ctx, &taskv1.SubmitTaskRequest{
+				Type: "browser",
+				Env:  map[string]string{"PORT": fmt.Sprintf("%d", port)},
+			})
 			result = res
 			err = e
 		case "register_connection":

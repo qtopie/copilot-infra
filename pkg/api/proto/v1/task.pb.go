@@ -794,6 +794,9 @@ type GetTaskResponse struct {
 	Error         string                 `protobuf:"bytes,5,opt,name=error,proto3" json:"error,omitempty"`
 	AccessUrl     string                 `protobuf:"bytes,6,opt,name=access_url,json=accessUrl,proto3" json:"access_url,omitempty"`
 	Name          string                 `protobuf:"bytes,7,opt,name=name,proto3" json:"name,omitempty"`
+	Command       string                 `protobuf:"bytes,8,opt,name=command,proto3" json:"command,omitempty"`
+	Type          string                 `protobuf:"bytes,9,opt,name=type,proto3" json:"type,omitempty"`
+	WorkDir       string                 `protobuf:"bytes,10,opt,name=work_dir,json=workDir,proto3" json:"work_dir,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -873,6 +876,27 @@ func (x *GetTaskResponse) GetAccessUrl() string {
 func (x *GetTaskResponse) GetName() string {
 	if x != nil {
 		return x.Name
+	}
+	return ""
+}
+
+func (x *GetTaskResponse) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *GetTaskResponse) GetType() string {
+	if x != nil {
+		return x.Type
+	}
+	return ""
+}
+
+func (x *GetTaskResponse) GetWorkDir() string {
+	if x != nil {
+		return x.WorkDir
 	}
 	return ""
 }
@@ -1111,7 +1135,7 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\n" +
 	"access_url\x18\x02 \x01(\tR\taccessUrl\")\n" +
 	"\x0eGetTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\xc9\x01\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\x92\x02\n" +
 	"\x0fGetTaskResponse\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
@@ -1122,7 +1146,11 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\x05error\x18\x05 \x01(\tR\x05error\x12\x1d\n" +
 	"\n" +
 	"access_url\x18\x06 \x01(\tR\taccessUrl\x12\x12\n" +
-	"\x04name\x18\a \x01(\tR\x04name\"L\n" +
+	"\x04name\x18\a \x01(\tR\x04name\x12\x18\n" +
+	"\acommand\x18\b \x01(\tR\acommand\x12\x12\n" +
+	"\x04type\x18\t \x01(\tR\x04type\x12\x19\n" +
+	"\bwork_dir\x18\n" +
+	" \x01(\tR\aworkDir\"L\n" +
 	"\x12GetTaskLogsRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +

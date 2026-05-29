@@ -117,6 +117,9 @@ message GetTaskResponse {
   string error = 5;
   string access_url = 6;
   string name = 7;
+  string command = 8;
+  string type = 9;
+  string work_dir = 10;
 }
 
 message GetTaskLogsRequest {

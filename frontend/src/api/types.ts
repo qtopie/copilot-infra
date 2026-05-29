@@ -1,12 +1,16 @@
 export interface Task {
   taskId: string;
+  type: string;
   status: string;
   createdAt: string;
   updatedAt: string;
   error?: string;
   name?: string;
   command?: string;
+  workDir?: string;
+  project?: string;
   isLongRunning?: boolean;
+  accessUrl?: string;
 }
 
 export interface SearchMatch {

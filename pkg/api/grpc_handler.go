@@ -109,12 +109,7 @@ func (h *GRPCHandler) SubmitTask(ctx context.Context, req *taskv1.SubmitTaskRequ
 	}, nil
 }
 
-func (h *GRPCHandler) GetTask(ctx context.Context, req *taskv1.GetTaskRequest) (*taskv1.GetTaskResponse, error) {
-	t, err := h.store.GetTask(ctx, req.TaskId)
-	if err != nil {
-		return nil, err
-	}
-
+func (h *GRPCHandler) mapTaskToResponse(t *task.Task) *taskv1.GetTaskResponse {
 	return &taskv1.GetTaskResponse{
 		TaskId:    t.ID,
 		Status:    string(t.Status),
@@ -123,7 +118,19 @@ func (h *GRPCHandler) GetTask(ctx context.Context, req *taskv1.GetTaskRequest) (
 		Error:     t.Error,
 		AccessUrl: t.AccessURL,
 		Name:      t.Name,
-	}, nil
+		Command:   t.Cmd,
+		Type:      string(t.Type),
+		WorkDir:   t.WorkDir,
+	}
+}
+
+func (h *GRPCHandler) GetTask(ctx context.Context, req *taskv1.GetTaskRequest) (*taskv1.GetTaskResponse, error) {
+	t, err := h.store.GetTask(ctx, req.TaskId)
+	if err != nil {
+		return nil, err
+	}
+
+	return h.mapTaskToResponse(t), nil
 }
 
 func (h *GRPCHandler) GetTaskLogs(ctx context.Context, req *taskv1.GetTaskLogsRequest) (*taskv1.GetTaskLogsResponse, error) {
@@ -150,15 +157,7 @@ func (h *GRPCHandler) ListTasks(ctx context.Context, req *taskv1.ListTasksReques
 
 	var respTasks []*taskv1.GetTaskResponse
 	for _, t := range tasks {
-		respTasks = append(respTasks, &taskv1.GetTaskResponse{
-			TaskId:    t.ID,
-			Status:    string(t.Status),
-			CreatedAt: t.CreatedAt.Format(time.RFC3339),
-			UpdatedAt: t.CreatedAt.Format(time.RFC3339),
-			Error:     t.Error,
-			AccessUrl: t.AccessURL,
-			Name:      t.Name,
-		})
+		respTasks = append(respTasks, h.mapTaskToResponse(t))
 	}
 
 	return &taskv1.ListTasksResponse{Tasks: respTasks}, nil

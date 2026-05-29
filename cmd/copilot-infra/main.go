@@ -417,7 +417,7 @@ func runSubmit(cmdStr, name, project, workdir, taskType string, longRunning bool
 	}
 	defer conn.Close()
 
-	envMap := make(map<string, string>)
+	envMap := make(map[string]string)
 	for _, env := range envs {
 		parts := strings.SplitN(env, "=", 2)
 		if len(parts) == 2 {

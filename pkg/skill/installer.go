@@ -1,12 +1,9 @@
 package skill
 
 import (
-	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"strings"
 )
 
 func InstallSkill() error {
@@ -50,13 +47,19 @@ func InstallSkill() error {
 }
 
 func cleanSkillDir(dir string) error {
-	info, err := os.Stat(dir)
+	info, err := os.Lstat(dir)
 	if os.IsNotExist(err) {
 		return nil
 	}
 	if err != nil {
 		return err
 	}
+
+	// If it's a symlink, just remove the symlink itself, not the target content
+	if info.Mode()&os.ModeSymlink != 0 {
+		return os.Remove(dir)
+	}
+
 	if !info.IsDir() {
 		return os.Remove(dir)
 	}

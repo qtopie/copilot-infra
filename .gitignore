@@ -14,7 +14,7 @@ bin/
 data.db
 data.db-shm
 data.db-wal
-components/
+/components/
 
 # Go
 vendor/

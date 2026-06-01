@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"syscall"
+
 	gotask "github.com/go-task/task/v3"
 	"github.com/go-task/task/v3/taskfile/ast"
 	"github.com/pulumi/pulumi/sdk/v3/go/pulumi"
@@ -16,18 +18,24 @@ import (
 	"github.com/qtopie/copilot-infra/pkg/infra"
 )
 
+type Store interface {
+	SaveTask(ctx context.Context, t *Task) error
+}
+
 type Executor struct {
 	LogDir       string
 	InfraManager *infra.Manager
+	Store        Store
 }
 
-func NewExecutor(logDir string, infraManager *infra.Manager) (*Executor, error) {
+func NewExecutor(logDir string, infraManager *infra.Manager, store Store) (*Executor, error) {
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return nil, err
 	}
 	return &Executor{
 		LogDir:       logDir,
 		InfraManager: infraManager,
+		Store:        store,
 	}, nil
 }
 
@@ -146,12 +154,23 @@ func (e *Executor) executeInfra(ctx context.Context, t *Task, logFile *os.File) 
 
 func (e *Executor) executeRawCommand(ctx context.Context, t *Task, w io.Writer) error {
 	cmd := exec.CommandContext(ctx, "sh", "-c", t.Cmd)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	if t.WorkDir != "" {
 		cmd.Dir = t.WorkDir
 	}
 	cmd.Stdout = w
 	cmd.Stderr = w
-	return cmd.Run()
+
+	if err := cmd.Start(); err != nil {
+		return err
+	}
+
+	t.PID = cmd.Process.Pid
+	if e.Store != nil {
+		_ = e.Store.SaveTask(ctx, t)
+	}
+
+	return cmd.Wait()
 }
 
 func (e *Executor) executeTaskfile(ctx context.Context, t *Task, w io.Writer) error {

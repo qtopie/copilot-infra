@@ -43,6 +43,8 @@ message RestartTaskResponse {
 
 message CancelTaskRequest {
   string task_id = 1;
+  string group = 2;
+  bool force = 3;
 }
 
 message CancelTaskResponse {
@@ -98,6 +100,7 @@ message SubmitTaskRequest {
   string project = 5; // pulumi project name
   string name = 6;    // task name or stack name
   bool is_long_running = 7; // true for persistent daemon tasks
+  string group = 8;
 }
 
 message SubmitTaskResponse {
@@ -120,6 +123,8 @@ message GetTaskResponse {
   string command = 8;
   string type = 9;
   string work_dir = 10;
+  string group = 11;
+  string log_path = 12;
 }
 
 message GetTaskLogsRequest {
@@ -131,7 +136,11 @@ message GetTaskLogsResponse {
   string content = 1;
 }
 
-message ListTasksRequest {}
+message ListTasksRequest {
+  string name = 1;
+  string id = 2;
+  string group = 3;
+}
 
 message ListTasksResponse {
   repeated GetTaskResponse tasks = 1;

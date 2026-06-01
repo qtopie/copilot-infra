@@ -14,6 +14,9 @@ import (
 	"github.com/qtopie/copilot-infra/pkg/task"
 	"github.com/qtopie/copilot-infra/pkg/worker"
 	"github.com/qtopie/sniphunt/pkg/search"
+	"strconv"
+	"strings"
+	"syscall"
 )
 
 type GRPCHandler struct {
@@ -63,6 +66,9 @@ func (h *GRPCHandler) SubmitTask(ctx context.Context, req *taskv1.SubmitTaskRequ
 		if req.WorkDir != "" {
 			existing.WorkDir = req.WorkDir
 		}
+		if req.Group != "" {
+			existing.Group = req.Group
+		}
 		existing.Status = task.StatusPending
 		existing.Error = ""
 		existing.StartedAt = nil
@@ -93,6 +99,7 @@ func (h *GRPCHandler) SubmitTask(ctx context.Context, req *taskv1.SubmitTaskRequ
 		WorkDir:   req.WorkDir,
 		Cmd:       req.Command,
 		Vars:      req.Env,
+		Group:     req.Group,
 		Status:    task.StatusPending,
 		LogPath:   fmt.Sprintf("%s/%s.log", h.logDir, id),
 		CreatedAt: time.Now(),
@@ -121,6 +128,8 @@ func (h *GRPCHandler) mapTaskToResponse(t *task.Task) *taskv1.GetTaskResponse {
 		Command:   t.Cmd,
 		Type:      string(t.Type),
 		WorkDir:   t.WorkDir,
+		Group:     t.Group,
+		LogPath:   t.LogPath,
 	}
 }
 
@@ -157,6 +166,15 @@ func (h *GRPCHandler) ListTasks(ctx context.Context, req *taskv1.ListTasksReques
 
 	var respTasks []*taskv1.GetTaskResponse
 	for _, t := range tasks {
+		if req.Name != "" && t.Name != req.Name {
+			continue
+		}
+		if req.Id != "" && t.ID != req.Id {
+			continue
+		}
+		if req.Group != "" && t.Group != req.Group {
+			continue
+		}
 		respTasks = append(respTasks, h.mapTaskToResponse(t))
 	}
 
@@ -185,8 +203,56 @@ func (h *GRPCHandler) RestartTask(ctx context.Context, req *taskv1.RestartTaskRe
 }
 
 func (h *GRPCHandler) CancelTask(ctx context.Context, req *taskv1.CancelTaskRequest) (*taskv1.CancelTaskResponse, error) {
+	if req.Group != "" {
+		tasks, err := h.store.ListTasks(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to list tasks: %w", err)
+		}
+
+		var cancelledCount int
+		for _, t := range tasks {
+			if t.Group != req.Group {
+				continue
+			}
+			if t.Status != task.StatusPending && t.Status != task.StatusRunning {
+				continue
+			}
+
+			if t.IsLongRunning {
+				proj := t.Project
+				if proj == "" {
+					proj = "copilot-infra-daemons"
+				}
+				if h.worker.Executor().InfraManager != nil {
+					_ = h.worker.Executor().InfraManager.Destroy(ctx, proj, t.ID, os.Stdout)
+				}
+			}
+
+			if req.Force && t.PID > 0 {
+				killProcessTree(t.PID)
+			}
+
+			h.worker.Cancel(t.ID)
+			t.Status = task.StatusCancelled
+			_ = h.store.SaveTask(ctx, t)
+			cancelledCount++
+		}
+
+		return &taskv1.CancelTaskResponse{
+			Message: fmt.Sprintf("cancelled %d tasks in group %s", cancelledCount, req.Group),
+		}, nil
+	}
+
+	if req.TaskId == "" {
+		return nil, fmt.Errorf("either task_id or group is required")
+	}
+
 	t, err := h.store.GetTask(ctx, req.TaskId)
-	if err == nil && t.IsLongRunning {
+	if err != nil {
+		return nil, err
+	}
+
+	if t.IsLongRunning {
 		// Destroy the background task via Pulumi
 		proj := t.Project
 		if proj == "" {
@@ -203,9 +269,23 @@ func (h *GRPCHandler) CancelTask(ctx context.Context, req *taskv1.CancelTaskRequ
 		}
 	}
 
+	if req.Force && t.PID > 0 {
+		killProcessTree(t.PID)
+	}
+
 	if ok := h.worker.Cancel(req.TaskId); ok {
+		t.Status = task.StatusCancelled
+		h.store.SaveTask(ctx, t)
 		return &taskv1.CancelTaskResponse{Message: "task cancellation signaled"}, nil
 	}
+
+	// If not running in worker but status is pending/running, mark it cancelled in state
+	if t.Status == task.StatusPending || t.Status == task.StatusRunning {
+		t.Status = task.StatusCancelled
+		h.store.SaveTask(ctx, t)
+		return &taskv1.CancelTaskResponse{Message: "task cancelled in store"}, nil
+	}
+
 	return nil, fmt.Errorf("task not found or not running")
 }
 
@@ -386,4 +466,80 @@ func (h *GRPCHandler) fillContext(m *taskv1.SearchMatch, before, after int) {
 			m.ContextAfter = lines[matchIdx+1:]
 		}
 	}
+}
+
+func killProcessTree(parentPID int) {
+	if parentPID <= 0 {
+		return
+	}
+
+	// 1. Get all descendant PIDs recursively
+	descendants, err := getChildPIDs(parentPID)
+	if err == nil {
+		// Kill descendants in reverse order (deepest children first)
+		for i := len(descendants) - 1; i >= 0; i-- {
+			childPID := descendants[i]
+			fmt.Printf("[CancelTask] Forcibly killing descendant process PID %d\n", childPID)
+			_ = syscall.Kill(childPID, syscall.SIGKILL)
+		}
+	}
+
+	// 2. Kill the parent process
+	fmt.Printf("[CancelTask] Forcibly killing parent process PID %d\n", parentPID)
+	_ = syscall.Kill(parentPID, syscall.SIGKILL)
+
+	// 3. Kill the process group just in case
+	_ = syscall.Kill(-parentPID, syscall.SIGKILL)
+}
+
+func getChildPIDs(parentPID int) ([]int, error) {
+	files, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+
+	parentToChildren := make(map[int][]int)
+
+	for _, file := range files {
+		if !file.IsDir() {
+			continue
+		}
+		pid, err := strconv.Atoi(file.Name())
+		if err != nil {
+			continue
+		}
+
+		statPath := filepath.Join("/proc", file.Name(), "stat")
+		data, err := os.ReadFile(statPath)
+		if err != nil {
+			continue
+		}
+
+		statStr := string(data)
+		lastCloseParen := strings.LastIndex(statStr, ")")
+		if lastCloseParen == -1 {
+			continue
+		}
+		remaining := statStr[lastCloseParen+1:]
+		fields := strings.Fields(remaining)
+		if len(fields) < 2 {
+			continue
+		}
+		ppid, err := strconv.Atoi(fields[1])
+		if err == nil {
+			parentToChildren[ppid] = append(parentToChildren[ppid], pid)
+		}
+	}
+
+	var descendants []int
+	var collect func(int)
+	collect = func(p int) {
+		children := parentToChildren[p]
+		for _, child := range children {
+			descendants = append(descendants, child)
+			collect(child)
+		}
+	}
+	collect(parentPID)
+	return descendants, nil
 }

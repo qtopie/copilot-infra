@@ -112,6 +112,8 @@ func (x *RestartTaskResponse) GetTaskId() string {
 type CancelTaskRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
+	Group         string                 `protobuf:"bytes,2,opt,name=group,proto3" json:"group,omitempty"`
+	Force         bool                   `protobuf:"varint,3,opt,name=force,proto3" json:"force,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -151,6 +153,20 @@ func (x *CancelTaskRequest) GetTaskId() string {
 		return x.TaskId
 	}
 	return ""
+}
+
+func (x *CancelTaskRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *CancelTaskRequest) GetForce() bool {
+	if x != nil {
+		return x.Force
+	}
+	return false
 }
 
 type CancelTaskResponse struct {
@@ -606,6 +622,7 @@ type SubmitTaskRequest struct {
 	Project       string                 `protobuf:"bytes,5,opt,name=project,proto3" json:"project,omitempty"`                                     // pulumi project name
 	Name          string                 `protobuf:"bytes,6,opt,name=name,proto3" json:"name,omitempty"`                                           // task name or stack name
 	IsLongRunning bool                   `protobuf:"varint,7,opt,name=is_long_running,json=isLongRunning,proto3" json:"is_long_running,omitempty"` // true for persistent daemon tasks
+	Group         string                 `protobuf:"bytes,8,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -687,6 +704,13 @@ func (x *SubmitTaskRequest) GetIsLongRunning() bool {
 		return x.IsLongRunning
 	}
 	return false
+}
+
+func (x *SubmitTaskRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
 }
 
 type SubmitTaskResponse struct {
@@ -797,6 +821,8 @@ type GetTaskResponse struct {
 	Command       string                 `protobuf:"bytes,8,opt,name=command,proto3" json:"command,omitempty"`
 	Type          string                 `protobuf:"bytes,9,opt,name=type,proto3" json:"type,omitempty"`
 	WorkDir       string                 `protobuf:"bytes,10,opt,name=work_dir,json=workDir,proto3" json:"work_dir,omitempty"`
+	Group         string                 `protobuf:"bytes,11,opt,name=group,proto3" json:"group,omitempty"`
+	LogPath       string                 `protobuf:"bytes,12,opt,name=log_path,json=logPath,proto3" json:"log_path,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -901,6 +927,20 @@ func (x *GetTaskResponse) GetWorkDir() string {
 	return ""
 }
 
+func (x *GetTaskResponse) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
+}
+
+func (x *GetTaskResponse) GetLogPath() string {
+	if x != nil {
+		return x.LogPath
+	}
+	return ""
+}
+
 type GetTaskLogsRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
@@ -999,6 +1039,9 @@ func (x *GetTaskLogsResponse) GetContent() string {
 
 type ListTasksRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Id            string                 `protobuf:"bytes,2,opt,name=id,proto3" json:"id,omitempty"`
+	Group         string                 `protobuf:"bytes,3,opt,name=group,proto3" json:"group,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1031,6 +1074,27 @@ func (x *ListTasksRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use ListTasksRequest.ProtoReflect.Descriptor instead.
 func (*ListTasksRequest) Descriptor() ([]byte, []int) {
 	return file_api_proto_v1_task_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *ListTasksRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ListTasksRequest) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *ListTasksRequest) GetGroup() string {
+	if x != nil {
+		return x.Group
+	}
+	return ""
 }
 
 type ListTasksResponse struct {
@@ -1085,9 +1149,11 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\x12RestartTaskRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\".\n" +
 	"\x13RestartTaskResponse\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\",\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"X\n" +
 	"\x11CancelTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\".\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x14\n" +
+	"\x05group\x18\x02 \x01(\tR\x05group\x12\x14\n" +
+	"\x05force\x18\x03 \x01(\bR\x05force\".\n" +
 	"\x12CancelTaskResponse\x12\x18\n" +
 	"\amessage\x18\x01 \x01(\tR\amessage\"u\n" +
 	"\x19RegisterConnectionRequest\x12\x12\n" +
@@ -1118,7 +1184,7 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\x0econtext_before\x18\x04 \x03(\tR\rcontextBefore\x12#\n" +
 	"\rcontext_after\x18\x05 \x03(\tR\fcontextAfter\"@\n" +
 	"\x0eSearchResponse\x12.\n" +
-	"\amatches\x18\x01 \x03(\v2\x14.task.v1.SearchMatchR\amatches\"\xa1\x02\n" +
+	"\amatches\x18\x01 \x03(\v2\x14.task.v1.SearchMatchR\amatches\"\xb7\x02\n" +
 	"\x11SubmitTaskRequest\x12\x18\n" +
 	"\acommand\x18\x01 \x01(\tR\acommand\x125\n" +
 	"\x03env\x18\x02 \x03(\v2#.task.v1.SubmitTaskRequest.EnvEntryR\x03env\x12\x19\n" +
@@ -1126,7 +1192,8 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\x04type\x18\x04 \x01(\tR\x04type\x12\x18\n" +
 	"\aproject\x18\x05 \x01(\tR\aproject\x12\x12\n" +
 	"\x04name\x18\x06 \x01(\tR\x04name\x12&\n" +
-	"\x0fis_long_running\x18\a \x01(\bR\risLongRunning\x1a6\n" +
+	"\x0fis_long_running\x18\a \x01(\bR\risLongRunning\x12\x14\n" +
+	"\x05group\x18\b \x01(\tR\x05group\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"L\n" +
@@ -1135,7 +1202,7 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\n" +
 	"access_url\x18\x02 \x01(\tR\taccessUrl\")\n" +
 	"\x0eGetTaskRequest\x12\x17\n" +
-	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\x92\x02\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\"\xc3\x02\n" +
 	"\x0fGetTaskResponse\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x16\n" +
 	"\x06status\x18\x02 \x01(\tR\x06status\x12\x1d\n" +
@@ -1150,14 +1217,19 @@ const file_api_proto_v1_task_proto_rawDesc = "" +
 	"\acommand\x18\b \x01(\tR\acommand\x12\x12\n" +
 	"\x04type\x18\t \x01(\tR\x04type\x12\x19\n" +
 	"\bwork_dir\x18\n" +
-	" \x01(\tR\aworkDir\"L\n" +
+	" \x01(\tR\aworkDir\x12\x14\n" +
+	"\x05group\x18\v \x01(\tR\x05group\x12\x19\n" +
+	"\blog_path\x18\f \x01(\tR\alogPath\"L\n" +
 	"\x12GetTaskLogsRequest\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
 	"tail_lines\x18\x02 \x01(\x03R\ttailLines\"/\n" +
 	"\x13GetTaskLogsResponse\x12\x18\n" +
-	"\acontent\x18\x01 \x01(\tR\acontent\"\x12\n" +
-	"\x10ListTasksRequest\"C\n" +
+	"\acontent\x18\x01 \x01(\tR\acontent\"L\n" +
+	"\x10ListTasksRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\tR\x02id\x12\x14\n" +
+	"\x05group\x18\x03 \x01(\tR\x05group\"C\n" +
 	"\x11ListTasksResponse\x12.\n" +
 	"\x05tasks\x18\x01 \x03(\v2\x18.task.v1.GetTaskResponseR\x05tasks2\x9a\x05\n" +
 	"\vTaskService\x12E\n" +

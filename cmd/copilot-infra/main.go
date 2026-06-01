@@ -47,6 +47,24 @@ var (
 )
 
 func main() {
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage of %s:\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "  %s [global_flags] <subcommand> [subcommand_flags]\n\n", os.Args[0])
+		fmt.Fprintf(flag.CommandLine.Output(), "Subcommands:\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  start\n\tStart copilot-infra daemon in the background\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  stop\n\tStop the background copilot-infra daemon\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  status\n\tCheck daemon status and recent tasks\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  restart\n\tRestart the background daemon\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  submit [flags] \"<command>\"\n\tSubmit a new background task\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  list [flags]\n\tList tasks with optional filters (name, id, group)\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  logs [flags] <task_id>\n\tView or stream task logs\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  cancel [flags] <task_id> | -group <name>\n\tStop running task(s) with optional force-kill\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  search [flags] \"<pattern>\"\n\tSearch task logs\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  install\n\tInstall the copilot-infra agent skill\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "  run\n\tRun the server in the foreground (default)\n\n")
+		fmt.Fprintf(flag.CommandLine.Output(), "Global Flags:\n")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
 	command := flag.Arg(0)
 
@@ -83,6 +101,7 @@ func main() {
 		workdir := submitCmd.String("workdir", "", "Work directory")
 		taskType := submitCmd.String("type", "taskfile", "Task type (taskfile, infra, browser)")
 		longRunning := submitCmd.Bool("long-running", false, "Is a long-running task")
+		group := submitCmd.String("group", "", "Task group name")
 		
 		var envs arrayFlags
 		submitCmd.Var(&envs, "env", "Environment variable in KEY=VALUE format (can be specified multiple times)")
@@ -95,9 +114,15 @@ func main() {
 			os.Exit(1)
 		}
 		
-		runSubmit(cmdArg, *name, *project, *workdir, *taskType, *longRunning, envs)
+		runSubmit(cmdArg, *name, *project, *workdir, *taskType, *longRunning, *group, envs)
 	case "list":
-		runList()
+		listCmd := flag.NewFlagSet("list", flag.ExitOnError)
+		listName := listCmd.String("name", "", "Filter tasks by name")
+		listID := listCmd.String("id", "", "Filter tasks by ID")
+		listGroup := listCmd.String("group", "", "Filter tasks by group")
+		listCmd.Parse(flag.Args()[1:])
+		
+		runList(*listName, *listID, *listGroup)
 	case "logs":
 		logsCmd := flag.NewFlagSet("logs", flag.ExitOnError)
 		follow := logsCmd.Bool("follow", false, "Stream/follow the logs")
@@ -112,12 +137,20 @@ func main() {
 		
 		runLogs(taskID, *follow)
 	case "cancel":
-		if len(flag.Args()) < 2 {
-			fmt.Println("Error: task ID is required")
-			fmt.Println("Usage: copilot-infra cancel <task_id>")
+		cancelCmd := flag.NewFlagSet("cancel", flag.ExitOnError)
+		cancelGroup := cancelCmd.String("group", "", "Cancel all tasks in this group")
+		force := cancelCmd.Bool("force", false, "Force kill process groups")
+		cancelCmd.Parse(flag.Args()[1:])
+		
+		taskID := cancelCmd.Arg(0)
+		if taskID == "" && *cancelGroup == "" {
+			fmt.Println("Error: either task ID or -group <name> is required")
+			fmt.Println("Usage:")
+			fmt.Println("  copilot-infra cancel [-force] <task_id>")
+			fmt.Println("  copilot-infra cancel [-force] -group <group_name>")
 			os.Exit(1)
 		}
-		runCancel(flag.Arg(1))
+		runCancel(taskID, *cancelGroup, *force)
 	case "search":
 		searchCmd := flag.NewFlagSet("search", flag.ExitOnError)
 		taskID := searchCmd.String("task", "", "Search logs for specific task")
@@ -318,7 +351,7 @@ func runServer() {
 	}
 
 	// 2. Initialize Task Executor
-	executor, err := task.NewExecutor(absLogDir, infraManager)
+	executor, err := task.NewExecutor(absLogDir, infraManager, nil)
 	if err != nil {
 		log.Fatalf("failed to create executor: %v", err)
 	}
@@ -342,6 +375,7 @@ func runServer() {
 
 	// 4. Initialize State Store
 	store := state.NewStore(daprClient)
+	executor.Store = store
 
 	// 5. Initialize Background Worker
 	w := worker.NewWorker(executor, store)
@@ -409,7 +443,7 @@ func getGRPCClient() (taskv1.TaskServiceClient, *grpc.ClientConn, error) {
 	return taskv1.NewTaskServiceClient(conn), conn, nil
 }
 
-func runSubmit(cmdStr, name, project, workdir, taskType string, longRunning bool, envs []string) {
+func runSubmit(cmdStr, name, project, workdir, taskType string, longRunning bool, group string, envs []string) {
 	client, conn, err := getGRPCClient()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -435,6 +469,7 @@ func runSubmit(cmdStr, name, project, workdir, taskType string, longRunning bool
 		Project:       project,
 		Name:          name,
 		IsLongRunning: longRunning,
+		Group:         group,
 	}
 
 	resp, err := client.SubmitTask(context.Background(), req)
@@ -450,7 +485,7 @@ func runSubmit(cmdStr, name, project, workdir, taskType string, longRunning bool
 	}
 }
 
-func runList() {
+func runList(nameFilter, idFilter, groupFilter string) {
 	client, conn, err := getGRPCClient()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -458,7 +493,11 @@ func runList() {
 	}
 	defer conn.Close()
 
-	resp, err := client.ListTasks(context.Background(), &taskv1.ListTasksRequest{})
+	resp, err := client.ListTasks(context.Background(), &taskv1.ListTasksRequest{
+		Name:  nameFilter,
+		Id:    idFilter,
+		Group: groupFilter,
+	})
 	if err != nil {
 		fmt.Printf("Error listing tasks: %v\n", err)
 		os.Exit(1)
@@ -469,8 +508,8 @@ func runList() {
 		return
 	}
 
-	fmt.Printf("%-36s %-16s %-12s %-24s %s\n", "TASK ID", "NAME", "STATUS", "CREATED AT", "INFO")
-	fmt.Println(strings.Repeat("-", 100))
+	fmt.Printf("%-36s %-16s %-12s %-12s %-24s %s\n", "TASK ID", "NAME", "GROUP", "STATUS", "CREATED AT", "INFO")
+	fmt.Println(strings.Repeat("-", 120))
 	for _, t := range resp.Tasks {
 		info := ""
 		if t.Error != "" {
@@ -482,7 +521,11 @@ func runList() {
 		if name == "" {
 			name = "-"
 		}
-		fmt.Printf("%-36s %-16s %-12s %-24s %s\n", t.TaskId, name, t.Status, t.CreatedAt, info)
+		grp := t.Group
+		if grp == "" {
+			grp = "-"
+		}
+		fmt.Printf("%-36s %-16s %-12s %-12s %-24s %s\n", t.TaskId, name, grp, t.Status, t.CreatedAt, info)
 	}
 }
 
@@ -541,7 +584,7 @@ func runLogs(taskID string, follow bool) {
 	}
 }
 
-func runCancel(taskID string) {
+func runCancel(taskID, group string, force bool) {
 	client, conn, err := getGRPCClient()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
@@ -549,7 +592,11 @@ func runCancel(taskID string) {
 	}
 	defer conn.Close()
 
-	resp, err := client.CancelTask(context.Background(), &taskv1.CancelTaskRequest{TaskId: taskID})
+	resp, err := client.CancelTask(context.Background(), &taskv1.CancelTaskRequest{
+		TaskId: taskID,
+		Group:  group,
+		Force:  force,
+	})
 	if err != nil {
 		fmt.Printf("Error canceling task: %v\n", err)
 		os.Exit(1)

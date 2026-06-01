@@ -10,7 +10,7 @@ import (
 
 func TestExecutor_ExecuteRawCommand(t *testing.T) {
 	logDir := ".test_logs"
-	executor, err := NewExecutor(logDir)
+	executor, err := NewExecutor(logDir, nil)
 	if err != nil {
 		t.Fatalf("failed to create executor: %v", err)
 	}
@@ -54,7 +54,7 @@ tasks:
 	defer os.Remove("Taskfile.yml")
 
 	logDir := ".test_logs_task"
-	executor, err := NewExecutor(logDir)
+	executor, err := NewExecutor(logDir, nil)
 	if err != nil {
 		t.Fatalf("failed to create executor: %v", err)
 	}

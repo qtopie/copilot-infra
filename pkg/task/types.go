@@ -39,6 +39,8 @@ type Task struct {
 	CreatedAt     time.Time         `json:"created_at"`
 	StartedAt     *time.Time        `json:"started_at,omitempty"`
 	EndedAt       *time.Time        `json:"ended_at,omitempty"`
+	Group         string            `json:"group,omitempty"`
+	PID           int               `json:"pid,omitempty"`
 }
 
 type SubmitTaskRequest struct {
